@@ -1,0 +1,58 @@
+start
+///* function
+
+sequence
+/// a = b
+
+sequence multi line
+/// this is a test
+/// this is a test
+
+function call
+/// [submodule]
+
+loop
+///{ cond > 0
+
+branch
+///
+
+///|> cond1 
+
+/// a = 1
+
+///>|
+
+branch 2
+
+///|> cond2 == false
+
+/// b = 1
+
+///>
+
+/// b = 2
+
+///>|
+
+branch n
+
+///|> cond3 : 'A'
+
+/// c = A
+
+///> 'B'
+
+/// c = B
+
+///> 'C'
+
+/// c = C
+
+///>|
+
+loop end
+///}
+
+end
+///**
