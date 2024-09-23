@@ -1,5 +1,5 @@
 start
-///* function
+/// * function
 
 sequence
 /// a = b
@@ -12,47 +12,47 @@ function call
 /// [submodule]
 
 loop
-///{ cond > 0
+/// { cond > 0
 
 branch
 ///
 
-///|> cond1 
+/// |> cond1
 
 /// a = 1
 
-///>|
+/// >|
 
 branch 2
 
-///|> cond2 == false
+/// |> cond2 == false
 
 /// b = 1
 
-///>
+/// >
 
 /// b = 2
 
-///>|
+/// >|
 
 branch n
 
-///|> cond3 : 'A'
+/// |> cond3 : 'A'
 
 /// c = A
 
-///> 'B'
+/// > 'B'
 
 /// c = B
 
-///> 'C'
+/// > 'C'
 
 /// c = C
 
-///>|
+/// >|
 
 loop end
-///}
+/// }
 
 end
-///**
+/// **

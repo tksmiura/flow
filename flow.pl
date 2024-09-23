@@ -17,7 +17,7 @@ binmode STDOUT, ":utf8";
 #   use "///" prefix for read flow
 #
 # start
-# ///* function
+# /// * function
 #
 # sequence
 # /// a = b
@@ -26,22 +26,34 @@ binmode STDOUT, ":utf8";
 # /// [submodule]
 #
 # loop
-# ///{ cond > 0
-#
-# branch
-# ///|> cond1 == false
-#
-# /// a = 1
-# ///>
-# /// a = 2
-# ///>|
+# /// { cond > 0
 #
 # loop end
-# ///}
-#
-# end
-# ///**
+# /// }
 
+# loop(do-while)
+# /// {
+#
+# loop end
+# /// } cond > 0
+
+# branch
+# /// |> cond1 == false
+#
+# /// a = 1
+#  else
+# /// >
+# /// a = 2
+#  end of branch
+# /// >|
+#
+
+#
+# end of function
+# /// **
+
+# 構文解析
+$ParseLeadStr = "///";                                      # 抽出用の先頭文字列
 
 #形状パラメータ
 $FontFamily = "Osaka-Mono,monospace";                       # font
@@ -84,7 +96,9 @@ foreach $infile (@ARGV) {
     print  "flow chart input $infile \n";
 
     open FILE, '<:encoding(UTF-8)', $infile || die "Can't open to $infile";
-    $Line = 0;
+    $Line = 0;     # 種別
+    $Text = "";    # 中身
+    $PreRead = undef; # 先読み行
     &Readline();
     while ($Line == $Begin) {
         # parse function block
@@ -301,7 +315,7 @@ sub CreateLoop {
     return $seq;                                           # 参照を返す
 }
 
-# Size
+# Size 大きさ(幅、高さ)と中心点のX座標を返す
 sub SizeOfBlock {
     my ($ref_block) = @_;
     my ($width) = $SeqWidth;
@@ -361,76 +375,132 @@ sub Position {
     return ($width,$height);
 }
 
+# 1ライン読みだし
+sub GetLine {
+    if (defined($PreRead)) {
+        my $l = $PreRead;
+        $PreRead = undef;
+        return $l;
+    }
+    if (eof(FILE)) {
+        return "__EOF__";
+    } else {
+        my $l = <FILE>;
+        $LineNum = $.;
+        return $l;
+    }
+}
+
+sub RevertLine {
+    my $l = $_;
+    $PreRead = $;
+}
+
 #字句解析部（行単位）
 sub Readline {
-    my($l, $no_match);
-#    my $Debug = 1;
+    my($l, $org_l);
+    my $Debug = 0;
     $Line = 0;
     $Text = "";
     $Selector = "";
-    $no_match = 0;
-    while ($Line == 0 || ($Line !=0 && $no_match == 0)) {
-        if (eof(FILE)) {
+    while (1) {
+        $l = &GetLine();
+        $org_l = $l;
+        if ($l eq "__EOF__") {
             $Line = $Eof;
-            $Debug && print "Read(EOF)\n";
+            $Debug && print "EOF:\n";
             return;
         }
-        $l = <FILE>;
-        $LineNum = $.;
-        if ($l =~ /\/\/\/\{\s*(.*)\s*$/) {   # ///{
+        if ($l =~ /${ParseLeadStr}\s*(.*)/) {     # remove match ///
+            $l = $1;
+            $Debug && print "READ: '$l'\n";
+        } else {
+            if ($Line != 0) {
+                $Debug && print "SEQUENCE1: $Line '$Text'\n";
+                return;
+            }
+            next;
+        }
+
+        if ($l =~ /\{\s*(.*)\s*$/) {                   # { as loop
+            if ($Line != 0) {
+                goto END_SEQ;
+            }
             $Line = $While;
             $Text = $1;
-            $Debug && print "Read($Line):$Text\n";
+            $Debug && print "Loop($Line):$Text\n";
             return;
-        } elsif ($l =~ /\/\/\/\}\s*(.*)\s*$/) {   # ///}
+        } elsif ($l =~ /\}\s*(.*)\s*$/) {              # } as loop end
+            if ($Line != 0) {
+                goto END_SEQ;
+            }
             $Line = $EndLoop;
             $Text = $1;
-            $Debug && print "Read($Line):$Text\n";
+            $Debug && print "LoopEnd($Line):$Text\n";
             return;
-        } elsif ($l =~ /\/\/\/\|>\s*([^\:]*)(\:(.*)|)\s*$/) {  # ///|>
+        } elsif ($l =~ /\|>\s*([^\:]*)(\:(.*)|)\s*$/) { # |> as start branch
+            if ($Line != 0) {
+                goto END_SEQ;
+            }
             $Line = $If;
             $Text = $1;
             $Selector = $3;
-            $Debug && print "Read($Line):$Text\n";
+            $Debug && print "Branch($Line):$Text\n";
             return;
-        } elsif ($l =~ /\/\/\/>(\s+(.*)\s*|)$/) {  # ///>
+        } elsif ($l =~ />(\s+(.*)\s*|)$/) {           # > as branch internal
+            if ($Line != 0) {
+                goto END_SEQ;
+            }
             $Line = $Else;
             $Text =  "";
             $Selector = $2;
-            $Debug && print "Read($Line): $Text\n";
+            $Debug && print "BranchIn($Line): $Text\n";
             return;
-        } elsif ($l =~ /\/\/\/>\|$/) {  # ///>|
+        } elsif ($l =~ />\|$/) {                       # >| branch end
+            if ($Line != 0) {
+                goto END_SEQ;
+            }
             $Line = $EndIf;
-            $Debug && print "Read($Line)\n";
+            $Debug && print "BranchEnd($Line)\n";
             return;
-        } elsif ($l =~ /\/\/\/\s+\[([^\]]*)\]$/) {  # /// [func]
+        } elsif ($l =~ /\[([^\]]*)\]$/) {              # [func]
+            if ($Line != 0) {
+                goto END_SEQ;
+            }
             $Line = $Func;
             $Text = $1;
-            $Debug && print "Read($Line):$Text\n";
+            $Debug && print "Module($Line):$Text\n";
             return;
-        } elsif ($l =~ /\/\/\/\*\s+([^\s]*)/) { # ///* name
+        } elsif ($l =~ /\*\s+([^\s]*)/) {              # * name
+            if ($Line != 0) {
+                goto END_SEQ;
+            }
             $Line = $Begin;
             $Text = $1;
-            $Debug && print "Read($Line):'$Text'\n";
+            $Debug && print "Function($Line):'$Text'\n";
             return;
-        } elsif ($l =~ /\/\/\/\*\*/) { # ///**
+        } elsif ($l =~ /\*\*/) {                       # **
+            if ($Line != 0) {
+                goto END_SEQ;
+            }
             $Line = $End;
             $Text = $1;
-            $Debug && print "Read($Line):$Text\n";
+            $Debug && print "End($Line):$Text\n";
             return;
-        } elsif ($l =~ /\/\/\/\s+([^\s].*)$/) {  # /// sequence
+        } elsif ($l =~ /([^\s].*)$/) {                 # sequence
             if ($Line != $Seq) {
                 $Line = $Seq;
                 $Text = $1;
             } else {
                 $Text .= "\n$1";
             }
-            $no_match = 0;
-        } else {
-            $no_match = 1;
         }
     }
     $Debug && print "Read($Line):$Text\n";
+    return;
+  END_SEQ:
+    &RevertLine($org_l);
+    $Debug && print "SEQUENCE: '$Text'\n";
     return;
 }
 
@@ -547,6 +617,11 @@ sub DrawBranch {
     my $ty = $cy + $FontHeight / 2;                       # テキスト表示位置
     my $ref_block;
     my $last_x;
+    my $Debug = 0;
+
+    $Debug && print "--DrawBranch start\n";
+    $Debug && print Dumper($ref_seq);
+    $Debug && print "--DrawBranch end\n";
 
     &Polyline($cx, $y, $cx, $y + $SeqMargin);           # 矩形直上の線
     &Diamond($cx, $y + $SeqMargin, $SeqWidth, $DiaHeight); # 矩形
@@ -559,6 +634,7 @@ sub DrawBranch {
         my ($bw, $bh, $bmid_x) = &SizeOfBlock($ref_block); # ???
         my $top = $$ref_block[0];
         my $y;
+
         $last_x = $top->x + $top->mid_x;
         if ($count > 1) {
             &Polyline($last_x, $cy,                        # 分岐直上の線
@@ -567,7 +643,7 @@ sub DrawBranch {
                       $last_x, $ref_seq->y + $ref_seq->height - $SeqMargin);
         } else {
             &Polyline($last_x, $top->y + $bh,
-                      $last_x, $ref_seq->y + $ref_seq->height);
+                      $last_x, $ref_seq->y + $ref_seq->height);  # 分岐直下の線
         }
 #        &TextSmall($cx - $FontSizeS * 2 ,
 #                   $cy + $SeqMargin + $DiaHeight / 2 , "YES");
