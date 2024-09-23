@@ -1,14 +1,21 @@
+#!/opt/homebrew/bin/perl     # for mac homebrew perl
 #!/usr/bin/perl
 #flow chart
 
 use utf8;
-#use Encode;
+use feature 'unicode_strings';
+use Encode;
+use Text::VisualWidth::PP;
+use Getopt::Long;
 use Class::Struct;
 use Data::Dumper;
 
+binmode STDIN,  ":utf8";
+binmode STDOUT, ":utf8";
+
 # syntax
 #   use "///" prefix for read flow
-# 
+#
 # start
 # ///* function
 #
@@ -37,14 +44,15 @@ use Data::Dumper;
 
 
 #形状パラメータ
-$FontWidth = 5;                                                  # font幅(半角)
-$FontWidthJ = 10;                                                # 全角
-$FontHeight = 10;
+$FontFamily = "Osaka-Mono,monospace";                       # font
+$FontWidth = 10;                                            # フォントの幅(半角)
+$FontWidthJ = 20;                                           # フォントの幅(全角)
+$FontHeight = 20;                                           # フォントの高さ
 $FontSizeS = 8;                                             # font(small)
 $SeqWidth = 150;                                            # ボックスの幅
 $BoxPadding = 4;                                            # パディング（内側の隙間）
 $SeqMargin = 8;                                             # シーケンス間のマージン
-$DiaHeight = 32;                                             # 分岐（菱側の高さ）
+$DiaHeight = 32;                                            # 分岐（菱側の高さ）
 $SideMargin = 40;                                           # 分岐間の横方向のマージン
 $ArrowLength = 5;                                           # 矢印の長さ
 $ArrowWidth = 2;                                            # 矢印の幅
@@ -74,28 +82,28 @@ $Debug = 0;
 
 foreach $infile (@ARGV) {
     print  "flow chart input $infile \n";
- 
-    open(FILE, "<$infile") || die "Can't open to $infile";
+
+    open FILE, '<:encoding(UTF-8)', $infile || die "Can't open to $infile";
     $Line = 0;
     &Readline();
     while ($Line == $Begin) {
         # parse function block
         my ($begin) = &CreateSequence($Text, $Begin);
         $Outfile = $Text . ".svg";
-        print  "create $Outfile\n";        
+        print  "create $Outfile\n";
         &Readline();
         my ($block) = &ParseBlock();
         if ($Line != $End) {
             die "syntax error $LineNum near $Line $Text in main\n";
         };
         &Readline();
-        my ($end) = &CreateSequence("", $End);        
+        my ($end) = &CreateSequence("", $End);
         my (@work) = ( $begin, @$block, $end );
         $ref_block_all = \@work;
         $Debug && print Dumper($ref_block_all);
 
         # fix position
-        my($width, $height) = 
+        my($width, $height) =
             &Position($PageMargin,$PageMargin,$ref_block_all);
         $width += $PageMargin*2;
         $height += $PageMargin*2;
@@ -110,7 +118,7 @@ foreach $infile (@ARGV) {
 
     if ($Line != $Eof) {
         #$ref_block_all = &ParseBlock();
-        die "syntax error $LineNum near $Line $Text in main\n";        
+        die "syntax error $LineNum near $Line $Text in main\n";
     }
 
     close(FILE);
@@ -121,7 +129,7 @@ exit 0;
 sub ParseBlock {
     $Debug && print "ParseBlock\n";
     my (@block) = ();
-    
+
     while ($Line == $Seq || $Line == $Func ||
            $Line == $If || $Line == $While) {
         if ($Line == $Seq) {                               # 通常文
@@ -131,7 +139,7 @@ sub ParseBlock {
         } elsif ($Line == $Func) {
             my($seq) = &CreateSequence($Text, $Func);
             push(@block, $seq);
-            &Readline();        
+            &Readline();
         } elsif ($Line eq $If) {
             my($seq) = &ParseIf();
             push(@block, $seq);
@@ -156,12 +164,12 @@ sub ParseIf {
     push(@ref_blocks, $ref_block);
     while ($Line == $Else) {
         push(@Selectors, $Selector);
-        &Readline();            
+        &Readline();
         $ref_block = &ParseBlock();
         push(@ref_blocks, $ref_block);
     }
     if ($Line == $EndIf) {
-        &Readline();        
+        &Readline();
     } else {
         die "syntax error $LineNum near $Line $Text in if\n";
     }
@@ -215,16 +223,16 @@ sub CreateSequence {
     if ($h == 0) {
         $h = $FontHeight;
     }
-    
+
     $seq->type($Seq);
     $seq->x(0);
     $seq->y(0);
     $seq->mid_x($w_max / 2);
     $seq->width($w_max);
     if ($style eq $Begin) {
-        $seq->height($h + $BoxPadding * 2  + $SeqMargin);        
+        $seq->height($h + $BoxPadding * 2  + $SeqMargin);
     } elsif ($style eq $End) {
-        $seq->height($h + $BoxPadding * 2);        
+        $seq->height($h + $BoxPadding * 2);
     } else {
         $seq->height($h + $BoxPadding * 2  + $SeqMargin * 2);
     }
@@ -240,7 +248,7 @@ sub CreateBranch {
     my $i = 0;
     my $w = 0;
     my $h = 0;
-    
+
     my $seq = Node->new();
 
     foreach $ref_block (@ref_blocks) {
@@ -249,7 +257,7 @@ sub CreateBranch {
         if ($h < $height[$i]) {
             $h = $height[$i];
         }
-        $seq->blocks($i, $ref_block);        
+        $seq->blocks($i, $ref_block);
         $i ++;
     }
     $w += $SideMargin * ($i - 1);
@@ -264,7 +272,7 @@ sub CreateBranch {
     $seq->width($w);
     $seq->height($h + $DiaHeight + $SeqMargin * 3);
     $seq->text($text);
-    
+
     return $seq;                                           # 参照を返す
 }
 
@@ -277,7 +285,7 @@ sub CreateLoop {
     $seq->y(0);
     $seq->text($text);
     $seq->blocks(0, $ref_block);
-    
+
     if (!$do_while) {
         $seq->type($Loop);
         $seq->mid_x($mid_x + $SideMargin);
@@ -292,7 +300,7 @@ sub CreateLoop {
 
     return $seq;                                           # 参照を返す
 }
-        
+
 # Size
 sub SizeOfBlock {
     my ($ref_block) = @_;
@@ -312,7 +320,7 @@ sub SizeOfBlock {
         $height += $ref_seq->height;
     }
     $width = $left + $right;
-    
+
     return ($width, $height, $left);
 }
 
@@ -322,7 +330,7 @@ sub Position {
     my ($width, $height, $mid_x) = &SizeOfBlock($ref_block);
     my ($cur_y) = $y0;
     $Debug && print "Position $width, $height, $mid_x\n";
-    
+
     foreach $ref_seq (@$ref_block) {
         $ref_seq->x($x0 + $mid_x - $ref_seq->mid_x);
         $ref_seq->y($cur_y);
@@ -339,7 +347,7 @@ sub Position {
             my $offset_x = 0;
             my $ref_block;
             my $w1, $h1;
-            
+
             my $count = 0;
             while ($ref_block  = $ref_seq->blocks($count++)) {
                 ($w1, $h1) = &Position($ref_seq->x + $offset_x,
@@ -349,7 +357,7 @@ sub Position {
             }
         }
     }
-    
+
     return ($width,$height);
 }
 
@@ -369,12 +377,12 @@ sub Readline {
         }
         $l = <FILE>;
         $LineNum = $.;
-        if ($l =~ /\/\/\/\{\s*(.*)\s*$/) {   # ///{ 
+        if ($l =~ /\/\/\/\{\s*(.*)\s*$/) {   # ///{
             $Line = $While;
             $Text = $1;
             $Debug && print "Read($Line):$Text\n";
             return;
-        } elsif ($l =~ /\/\/\/\}\s*(.*)\s*$/) {   # ///} 
+        } elsif ($l =~ /\/\/\/\}\s*(.*)\s*$/) {   # ///}
             $Line = $EndLoop;
             $Text = $1;
             $Debug && print "Read($Line):$Text\n";
@@ -400,7 +408,7 @@ sub Readline {
             $Text = $1;
             $Debug && print "Read($Line):$Text\n";
             return;
-        } elsif ($l =~ /\/\/\/\*\s+([^\s]*)/) { # ///* name 
+        } elsif ($l =~ /\/\/\/\*\s+([^\s]*)/) { # ///* name
             $Line = $Begin;
             $Text = $1;
             $Debug && print "Read($Line):'$Text'\n";
@@ -415,7 +423,7 @@ sub Readline {
                 $Line = $Seq;
                 $Text = $1;
             } else {
-                $Text .= "\n$1";                
+                $Text .= "\n$1";
             }
             $no_match = 0;
         } else {
@@ -430,9 +438,9 @@ sub Readline {
 #SVG
 sub DrawFlow {
     my ($out_file, $width, $height, $ref_block) =@_;
-    
-    open(OUT, ">:utf8", $out_file) || die "Can't open to $out_file\n"; # FILEを開く(utf8)
-    
+
+    open(OUT, '>:encoding(UTF-8)', $out_file) || die "Can't open to $out_file\n"; # FILEを開く(utf8)
+
     &StartPage($width, $height);
     &DrawBlock($ref_block);
     &EndPage();
@@ -450,7 +458,7 @@ sub DrawBlock {
         } elsif ($type == $Branch) {
             $Debug && &TestBox($ref_seq->x,$ref_seq->y,
                                $ref_seq->width,$ref_seq->height);
-            
+
             &DrawBranch($ref_seq);
             my $block;
             my $count = 0;
@@ -477,12 +485,12 @@ sub DrawLoop {
                                         $ref_seq->mid_x,
                                         $ref_seq->width,$ref_seq->height);
     $Debug && print "DrawLoop $x, $y, $width, $height, $mid_x\n";
-    
+
     my ($text) = sprintf("%16.16s", $ref_seq->text);
 
     my ($cx) = $x + $mid_x;
     my ($cy) = $y + $SeqMargin * 2 + $DiaHeight / 2;
-    my ($ty) = $cy + $FontHeight / 2; 
+    my ($ty) = $cy + $FontHeight / 2;
     my ($x_out) = $x + $width;
     my ($bottom_y) = $y + $height;
 
@@ -508,12 +516,12 @@ sub DrawDoWhile {
                                         $ref_seq->mid_x,
                                         $ref_seq->width,$ref_seq->height);
     $Debug && print "DrawDoWhile $x, $y, $width, $height, $mid_x\n";
-    
+
     my ($text) = sprintf("%16.16s", $ref_seq->text);
 
     my ($cx) = $x + $mid_x;
     my ($cy) = $y + $height - $SeqMargin - $DiaHeight / 2;
-    my ($ty) = $cy + $FontHeight / 2; 
+    my ($ty) = $cy + $FontHeight / 2;
     my ($bottom_y) = $y + $height;
 
     &Polyline($cx,$cy - $DiaHeight / 2 - $SeqMargin, $cx, $bottom_y);
@@ -539,7 +547,7 @@ sub DrawBranch {
     my $ty = $cy + $FontHeight / 2;                       # テキスト表示位置
     my $ref_block;
     my $last_x;
-    
+
     &Polyline($cx, $y, $cx, $y + $SeqMargin);           # 矩形直上の線
     &Diamond($cx, $y + $SeqMargin, $SeqWidth, $DiaHeight); # 矩形
     &Text($cx,$ty, $text);
@@ -569,7 +577,7 @@ sub DrawBranch {
     if ($count == 1) {
         &TextSmall($cx - $FontSizeS*2 ,$cy + $DiaHeight/2 + $FontSizeS, "YES");
         &TextSmall($cx + $SeqWidth/2 + $FontSizeS*2 ,$cy - 2, "NO");
-        $Debug && print "DrawBranch $x $y $width $height\n"; 
+        $Debug && print "DrawBranch $x $y $width $height\n";
         &PolylineA($cx + $SeqWidth/2, $cy,
                    $x + $width, $cy,
                    $x + $width, $y + $height - $SeqMargin,
@@ -582,41 +590,33 @@ sub DrawBranch {
     }
 }
 
-sub Diamond {
-    my($cx,$y,$w,$h) = @_;                                  # 始点は中央上
-    my($x2,$y2,$x3,$y3) = ($cx + $w/2, $y + $h/2, $cx - $w/2, $y + $h);
-    print OUT <<END_OF_DATA;
-    <polygon points="$cx $y, $x2 $y2, $cx $y3, $x3 $y2" fill="orangered" stroke="black" />
-END_OF_DATA
-}
-
 sub DrawSequence {
     my ($ref_seq) = @_;
-    my ($x, $y, $width, $height, $mid_x, $text, $style) = 
+    my ($x, $y, $width, $height, $mid_x, $text, $style) =
         ($ref_seq->x, $ref_seq->y,
          $ref_seq->width, $ref_seq->height,
          $ref_seq->mid_x, $ref_seq->text,
          $ref_seq->style);
     my ($cx) = $x + $mid_x;
     my $t;
-    
+
     $Debug && print "DrawSequence $x, $y, $width, $height, $mid_x, $text, $style\n";
     if ($style eq $Begin) {
         &Polyline($cx, $y + $height - $SeqMargin, $cx, $y + $height);
         &RoundBox($x, $y, $width, $FontHeight * 1 + $BoxPadding * 2);
-        
+
     } elsif ($style == $End) {
-        &Polyline($cx, $y, $cx, $y + $SeqMargin); 
+        &Polyline($cx, $y, $cx, $y + $SeqMargin);
         $y += $SeqMargin;
         &RoundBox($x, $y, $width, $FontHeight * 1 + $BoxPadding * 2);
         $text = "END";
     } else {
-        &Polyline($cx, $y, $cx, $y + $height);         
+        &Polyline($cx, $y, $cx, $y + $height);
         $y += $SeqMargin;
         if ($style == $Func) {
-            &BoxF($x, $y, $width, $height - $SeqMargin * 2); 
+            &BoxF($x, $y, $width, $height - $SeqMargin * 2);
         } else {
-            &Box($x, $y, $width, $height - $SeqMargin * 2); 
+            &Box($x, $y, $width, $height - $SeqMargin * 2);
         }
     }
     foreach $t (split /\n/, $text) {
@@ -625,7 +625,7 @@ sub DrawSequence {
     }
 }
 
-#Pageの始め 
+#Pageの始め
 sub StartPage {
     my ($width, $height) = @_;
 	print OUT <<END_OF_DATA;
@@ -674,9 +674,9 @@ END_OF_DATA
 #文字列表示（通常サイズ）
 sub Text {
     my ($x, $y, $text) = @_;
-    my ($text2) = &XMLText($text);    
+    my ($text2) = &XMLText($text);
 	print OUT <<END_OF_DATA;
-        <text text-anchor="middle" x="$x" y="$y" font-size="$FontSize" >
+        <text text-anchor="middle" dominant-baseline="text-after-edge" x="$x" y="$y" font-size="$FontHeight" font-family="$FontFamily" >
             $text2
         </text>
 END_OF_DATA
@@ -685,9 +685,9 @@ END_OF_DATA
 #文字列表示（小サイズ）＝分岐先
 sub TextSmall {
     my ($x, $y, $text) = @_;
-    my ($text2) = &XMLText($text);    
+    my ($text2) = &XMLText($text);
 	print OUT <<END_OF_DATA;
-        <text text-anchor="middle" x="$x" y="$y" font-size="$FontSizeS" >
+        <text text-anchor="middle" x="$x" y="$y" font-size="$FontSizeS" font-family="$FontFamily">
             $text2
         </text>
 END_OF_DATA
@@ -737,7 +737,7 @@ sub PolylineA {
         $y = shift(@lines);
         $points = $points . ", $x $y";
     }
-    
+
 	print OUT <<END_OF_DATA;
     <polyline points="$points" fill="none" stroke="black" />
     <polygon points="$x $y, $x2, $y2, $x3 $y3" fill="black" stroke="black" />
@@ -778,4 +778,12 @@ sub XMLText {
     $text =~ s/\</\&lt\;/g; # '<' → '&lt'
     $text =~ s/\>/\&gt\;/g; # '>' → '&gt'
     return ($text);
+}
+
+sub Diamond {
+    my($cx,$y,$w,$h) = @_;                                  # 始点は中央上
+    my($x2,$y2,$x3,$y3) = ($cx + $w/2, $y + $h/2, $cx - $w/2, $y + $h);
+    print OUT <<END_OF_DATA;
+    <polygon points="$cx $y, $x2 $y2, $cx $y3, $x3 $y2" fill="orangered" stroke="black" />
+END_OF_DATA
 }
