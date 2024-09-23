@@ -646,7 +646,7 @@ sub DrawLoop {
                                         $ref_seq->width,$ref_seq->height);
     $Debug && print "DrawLoop $x, $y, $width, $height, $mid_x\n";
 
-    my ($text) = sprintf("%16.16s", $ref_seq->text);
+    my ($text, $sub_text) = split /#/, $ref_seq->text;
 
     my ($cx) = $x + $mid_x;
     my ($cy) = $y + $SeqMargin * 2 + $DiaHeight / 2;
@@ -656,7 +656,9 @@ sub DrawLoop {
 
     &Polyline($cx,$y,$cx,$y + $DiaHeight + $SeqMargin * 3);
     &Diamond($cx, $y + $SeqMargin*2, $SeqWidth, $DiaHeight, $ColorLoop);
-    &Text($cx,$ty, $text);
+    &Text($cx,$ty, $text);                                                         # 条件文
+    &TextSmall($cx + $SeqWidth / 4 , $ty - $DiaHeight * 0.75, $sub_text);          # 説明文
+
     &TextSmall($cx - $FontSizeS*2 ,$cy + $DiaHeight/2 + $FontSizeS, "YES");
     &TextSmall($cx + $SeqWidth/2 + $FontSizeS*2 ,$cy - 2, "NO");
     &Polyline($cx + $SeqWidth/2, $cy,
@@ -677,7 +679,7 @@ sub DrawDoWhile {
                                         $ref_seq->width,$ref_seq->height);
     $Debug && print "DrawDoWhile $x, $y, $width, $height, $mid_x\n";
 
-    my ($text) = sprintf("%16.16s", $ref_seq->text);
+    my ($text, $sub_text) = split /#/, $ref_seq->text;
 
     my ($cx) = $x + $mid_x;
     my ($cy) = $y + $height - $SeqMargin - $DiaHeight / 2;
@@ -686,7 +688,9 @@ sub DrawDoWhile {
 
     &Polyline($cx,$cy - $DiaHeight / 2 - $SeqMargin, $cx, $bottom_y);
     &Diamond($cx, $cy - $DiaHeight / 2, $SeqWidth, $DiaHeight, $ColorLoop);
-    &Text($cx,$ty, $text);
+    &Text($cx,$ty, $text);                                                         # 条件文
+    &TextSmall($cx + $SeqWidth / 4 , $ty - $DiaHeight * 0.75, $sub_text);          # 説明文
+
     &TextSmall($cx - $FontSizeS*2 ,$cy + $DiaHeight/2 + $FontSizeS, "NO");
     &TextSmall($cx - $SeqWidth/2 - $FontSizeS*3 ,$cy - 2, "YES");
     &PolylineA($cx - $SeqWidth/2 , $cy,
@@ -695,27 +699,30 @@ sub DrawDoWhile {
                $cx, $y);
 }
 
-# branch loop width{0|1}の処理が必要
+# branch
 sub DrawBranch {
     my ($ref_seq) = @_;
     my ($x,$y,$mid_x,$width,$height) = ($ref_seq->x,$ref_seq->y,
                                         $ref_seq->mid_x,
                                         $ref_seq->width,$ref_seq->height);
-    my ($text) = sprintf("%16.16s", $ref_seq->text);
     my $cx = $x + $mid_x;                                 # 中央ｘ位置
-    my $cy = $y + $SeqMargin + $DiaHeight / 2;             # 分岐の中央Ｙ位置
+    my $cy = $y + $SeqMargin + $DiaHeight / 2;            # 分岐の中央Ｙ位置
     my $ty = $cy + $FontHeight / 2;                       # テキスト表示位置
     my $ref_block;
     my $last_x;
     my $Debug = 0;
+
+    my ($text, $sub_text) = split /#/, $ref_seq->text;
 
     $Debug && print "--DrawBranch start\n";
     $Debug && print Dumper($ref_seq);
     $Debug && print "--DrawBranch end\n";
 
     &Polyline($cx, $y, $cx, $y + $SeqMargin);           # 矩形直上の線
-    &Diamond($cx, $y + $SeqMargin, $SeqWidth, $DiaHeight, $ColorBranch); # 矩形
-    &Text($cx,$ty, $text);
+    &Diamond($cx, $y + $SeqMargin, $SeqWidth, $DiaHeight, $ColorBranch);           # 矩形
+    &Text($cx,$ty, $text);                                                         # 条件文
+    &TextSmall($cx + $SeqWidth / 4 , $ty - $DiaHeight * 0.75, $sub_text);          # 説明文
+
     &Polyline($cx, $cy + $DiaHeight/2,
               $cx, $cy + $DiaHeight/2 + $SeqMargin);       # 矩形直下の線
 
@@ -740,8 +747,7 @@ sub DrawBranch {
         my $sel = $ref_seq->selectors($count - 1);
         if (defined($sel)) {
             $Debug && print "  selecor $sel\n";
-            &TextSmall($last_x + 16, $top->y,              # 分岐直下の線
-                       $sel);
+            &TextSmall($last_x + 16, $top->y, $sel);             # 分岐直下の線
             $use_yes_no = 0;
         }
 
