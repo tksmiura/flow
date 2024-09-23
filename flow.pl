@@ -30,13 +30,13 @@ binmode STDOUT, ":utf8";
 #
 # loop end
 # /// }
-
+#
 # loop(do-while)
 # /// {
 #
 # loop end
 # /// } cond > 0
-
+#
 # branch
 # /// |> cond1 == false
 #
@@ -97,6 +97,8 @@ $Eof = 10;
 $Branch = 11;
 $Loop = 12;
 $DoWhile = 13;
+$JumpIn = 14;
+$JumpOut = 15;
 
 $Debug = 0;
 
@@ -155,13 +157,22 @@ sub ParseBlock {
     my (@block) = ();
 
     while ($Line == $Seq || $Line == $Func ||
-           $Line == $If || $Line == $While) {
+           $Line == $If || $Line == $While ||
+           $Line == $JumpOut || $Line == $JumpIn) {
         if ($Line == $Seq) {                               # 通常文
             my($seq) = &CreateSequence($Text);
             push(@block, $seq);
             &Readline();
         } elsif ($Line == $Func) {
             my($seq) = &CreateSequence($Text, $Func);
+            push(@block, $seq);
+            &Readline();
+        } elsif ($Line == $JumpIn) {
+            my($seq) = &CreateJumpIn($Text);
+            push(@block, $seq);
+            &Readline();
+        } elsif ($Line == $JumpOut) {
+            my($seq) = &CreateJumpOut($Text);
             push(@block, $seq);
             &Readline();
         } elsif ($Line eq $If) {
@@ -217,6 +228,37 @@ sub ParseWhile {
         die "syntax error $LineNum near $Line $Text in loop\n";
     }
     return &CreateLoop($condition,$ref_block, $do_while);
+}
+
+
+sub CreateJumpIn {
+    my ($text) = @_;
+    my $seq = Node->new();
+
+    $seq->type($JumpIn);
+    $seq->x(0);
+    $seq->y(0);
+    $seq->mid_x($SeqWidth / 2);
+    $seq->width($SeqWidth);
+    $seq->height($FontHeight + $BoxPadding * 2  + $SeqMargin * 2);
+    $seq->text($text);
+
+    return $seq;                                           # 参照を返す
+}
+
+sub CreateJumpOut {
+    my ($text) = @_;
+    my $seq = Node->new();
+
+    $seq->type($JumpOut);
+    $seq->x(0);
+    $seq->y(0);
+    $seq->mid_x($SeqWidth / 2);
+    $seq->width($SeqWidth);
+    $seq->height($FontHeight + $BoxPadding * 2  + $SeqMargin * 2);
+    $seq->text($text);
+
+    return $seq;                                           # 参照を返す
 }
 
 #構造作成
@@ -414,6 +456,7 @@ sub Readline {
     $Line = 0;
     $Text = "";
     $Selector = "";
+
     while (1) {
         $l = &GetLine();
         $org_l = $l;
@@ -448,6 +491,22 @@ sub Readline {
             $Line = $EndLoop;
             $Text = $1;
             $Debug && print "LoopEnd($Line):$Text\n";
+            return;
+        } elsif ($l =~ /=>\s*(.*)/) {                       # =>
+            if ($Line != 0) {
+                goto END_SEQ;
+            }
+            $Line = $JumpOut;
+            $Text = $1;
+            $Debug && print "JumpOut:$Text\n";
+        } elsif ($l =~ /<=\s*(.*)/) {                       # <=
+            if ($Line != 0) {
+                goto END_SEQ;
+            }
+            $Line = $JumpIn;
+            $Text = $1;
+            $Debug && print "JumpIn:$Text\n";
+            return;
             return;
         } elsif ($l =~ /\|>\s*([^\:]*)(\:(.*)|)\s*$/) { # |> as start branch
             if ($Line != 0) {
@@ -556,6 +615,14 @@ sub DrawBlock {
                                $ref_seq->width,$ref_seq->height);
             &DrawDoWhile($ref_seq);
             &DrawBlock($ref_seq->blocks(0));
+        } elsif ($type == $JumpIn) {
+            $Debug && &TestBox($ref_seq->x,$ref_seq->y,
+                               $ref_seq->width,$ref_seq->height);
+            &DrawJumpIn($ref_seq);
+        } elsif ($type == $JumpOut) {
+            $Debug && &TestBox($ref_seq->x,$ref_seq->y,
+                               $ref_seq->width,$ref_seq->height);
+            &DrawJumpOut($ref_seq);
         }
     }
 }
@@ -684,6 +751,49 @@ sub DrawBranch {
         &PolylineA($last_x, $y + $height - $SeqMargin,
                    $cx , $y + $height - $SeqMargin);
     }
+}
+
+
+sub DrawJumpIn {
+    my ($ref_seq) = @_;
+    my ($x, $y, $width, $height, $mid_x, $text) =
+        ($ref_seq->x, $ref_seq->y,
+         $ref_seq->width, $ref_seq->height,
+         $ref_seq->mid_x, $ref_seq->text);
+
+    my ($cx) = $x + $mid_x;
+    my ($cy) = $y + $height / 2;
+
+    my $t;
+
+    $Debug && print "DrawJumpIn $x, $y, $width, $height, $mid_x, $text\n";
+    &Polyline($cx, $y, $cx, $y + $height);
+    &PolylineA($cx + $SeqWidth / 4, $cy, $cx, $cy);
+    &Circle($cx + $SeqWidth / 4 + 15, $cy, 15)
+    &Text($cx + $SeqWidth / 4 + 15, $cy + $FontHeight / 2, $text);
+
+    #&RoundBox($x, $y, $width, $FontHeight * 1 + $BoxPadding * 2);
+}
+
+sub DrawJumpOut {
+    my ($ref_seq) = @_;
+    my ($x, $y, $width, $height, $mid_x, $text) =
+        ($ref_seq->x, $ref_seq->y,
+         $ref_seq->width, $ref_seq->height,
+         $ref_seq->mid_x, $ref_seq->text);
+
+    my ($cx) = $x + $mid_x;
+    my ($cy) = $y + $height / 2;
+
+    my $t;
+
+    $Debug && print "DrawJumpOut $x, $y, $width, $height, $mid_x, $text\n";
+    &Polyline($cx, $y, $cx, $cy);
+    &PolylineA($cx, $cy, $cx + $SeqWidth / 4, $cy);
+    &Circle($cx + $SeqWidth / 4 + 15, $cy, 15)
+    &Text($cx + $SeqWidth / 4 + 15, $cy + $FontHeight / 2, $text);
+
+    #&RoundBox($x, $y, $width, $FontHeight * 1 + $BoxPadding * 2);
 }
 
 sub DrawSequence {
@@ -882,5 +992,12 @@ sub Diamond {
     my($x2,$y2,$x3,$y3) = ($cx + $w/2, $y + $h/2, $cx - $w/2, $y + $h);
     print OUT <<END_OF_DATA;
     <polygon points="$cx $y, $x2 $y2, $cx $y3, $x3 $y2" fill="$c" stroke="black" />
+END_OF_DATA
+}
+
+sub Circle {
+    my($x,$y,$r) = @_;                                  # 始点は中央上
+    print OUT <<END_OF_DATA;
+    <circle cx="$x" cy="$y" r="$r" stroke="black" fill="none" />
 END_OF_DATA
 }

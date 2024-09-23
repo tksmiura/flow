@@ -1,5 +1,5 @@
 start
-///* function2
+///* function3
 
 sequence
 /// a = b
@@ -55,9 +55,14 @@ branch n
 
 /// A++
 
+/// B--
+
 ///> 'B'
 
 /// c = B
+
+Jump out
+/// => 1
 
 ///> 'C'
 
@@ -67,6 +72,10 @@ branch n
 
 loop end
 ///} loop > end
+
+jump in
+/// <= 1
+
 
 end
 ///**
