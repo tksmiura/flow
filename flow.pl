@@ -13,6 +13,9 @@ use Data::Dumper;
 binmode STDIN,  ":utf8";
 binmode STDOUT, ":utf8";
 
+$use_TextVisualWidthPP = 1;
+$Text::VisualWidth::PP::EastAsian = 1;     # East asian ambigious width
+
 # syntax
 #   use "///" prefix for read flow
 #
@@ -272,15 +275,8 @@ sub CreateSequence {
     $w_max = $SeqWidth;
 
     foreach $l (split /\n/, $text) {
-        foreach $ch (split //, $l) {
-            if ($ch =~ /[\x20-\x7f]/) {
-                $w += $FontWidth;
-            } elsif ($ch =~ /\n/) {
-                $h += $FontHeight;
-            } else {
-                $w += $FontWidthJ;
-            }
-        }
+        my $n = Text::VisualWidth::PP::width($l);
+        $w = $FontWidth * $n;
         if ($w_max < $w) {
             $w_max = $w;
         }
