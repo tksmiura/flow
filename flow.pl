@@ -71,6 +71,14 @@ $ArrowWidth = 2;                                            # 矢印の幅
 $FuncPadding = 5;                                           # 関数の２重線の隙間
 $PageMargin = 10;
 
+
+#色
+$ColorModule = "mediumslateblue";  # 関数呼び出し
+$ColorLoop = "yellow";       # ループの分岐部
+$ColorBranch = "orangered";  # 分岐
+$ColorNode = "white";        # 開始・終了ノード
+$ColorSeq = "white";         # 通常処理部
+
 struct Node => {
     type => '$', x => '$', y => '$', mid_x => '$', width => '$', height => '$',
     text => '$', style => '$', blocks => '@', selectors => '@',
@@ -124,7 +132,9 @@ foreach $infile (@ARGV) {
 
         @block0 = @$ref_block_all;
 
+        $Debug && print "---\n";
         $Debug && print Dumper(@block0);
+        $Debug && print "---\n";
 
         # draw svg flow chart
         &DrawFlow($Outfile, $width, $height, $ref_block_all);
@@ -256,7 +266,7 @@ sub CreateSequence {
 }
 
 sub CreateBranch {
-    my ($text,$ref_blocks) = @_;
+    my ($text, $ref_blocks, $selectors) = @_;
     my (@ref_blocks) = @$ref_blocks;
     my @width, @height, @mid_x;
     my $i = 0;
@@ -280,6 +290,7 @@ sub CreateBranch {
     }
 
     $seq->type($Branch);
+    $seq->selectors($selectors);
     $seq->x(0);
     $seq->y(0);
     $seq->mid_x($mid_x[0]);
@@ -445,7 +456,7 @@ sub Readline {
             $Line = $If;
             $Text = $1;
             $Selector = $3;
-            $Debug && print "Branch($Line):$Text\n";
+            $Debug && print "Branch($Line):$Text $Selector\n";
             return;
         } elsif ($l =~ />(\s+(.*)\s*|)$/) {           # > as branch internal
             if ($Line != 0) {
@@ -454,7 +465,7 @@ sub Readline {
             $Line = $Else;
             $Text =  "";
             $Selector = $2;
-            $Debug && print "BranchIn($Line): $Text\n";
+            $Debug && print "BranchIn($Line): $Text $Selector\n";
             return;
         } elsif ($l =~ />\|$/) {                       # >| branch end
             if ($Line != 0) {
@@ -565,7 +576,7 @@ sub DrawLoop {
     my ($bottom_y) = $y + $height;
 
     &Polyline($cx,$y,$cx,$y + $DiaHeight + $SeqMargin * 3);
-    &Diamond($cx, $y + $SeqMargin*2, $SeqWidth, $DiaHeight);
+    &Diamond($cx, $y + $SeqMargin*2, $SeqWidth, $DiaHeight, $ColorLoop);
     &Text($cx,$ty, $text);
     &TextSmall($cx - $FontSizeS*2 ,$cy + $DiaHeight/2 + $FontSizeS, "YES");
     &TextSmall($cx + $SeqWidth/2 + $FontSizeS*2 ,$cy - 2, "NO");
@@ -595,7 +606,7 @@ sub DrawDoWhile {
     my ($bottom_y) = $y + $height;
 
     &Polyline($cx,$cy - $DiaHeight / 2 - $SeqMargin, $cx, $bottom_y);
-    &Diamond($cx, $cy - $DiaHeight / 2, $SeqWidth, $DiaHeight);
+    &Diamond($cx, $cy - $DiaHeight / 2, $SeqWidth, $DiaHeight, $ColorLoop);
     &Text($cx,$ty, $text);
     &TextSmall($cx - $FontSizeS*2 ,$cy + $DiaHeight/2 + $FontSizeS, "NO");
     &TextSmall($cx - $SeqWidth/2 - $FontSizeS*3 ,$cy - 2, "YES");
@@ -624,11 +635,12 @@ sub DrawBranch {
     $Debug && print "--DrawBranch end\n";
 
     &Polyline($cx, $y, $cx, $y + $SeqMargin);           # 矩形直上の線
-    &Diamond($cx, $y + $SeqMargin, $SeqWidth, $DiaHeight); # 矩形
+    &Diamond($cx, $y + $SeqMargin, $SeqWidth, $DiaHeight, $ColorBranch); # 矩形
     &Text($cx,$ty, $text);
     &Polyline($cx, $cy + $DiaHeight/2,
               $cx, $cy + $DiaHeight/2 + $SeqMargin);       # 矩形直下の線
 
+    my $use_yes_no = 1;
     my $count = 0;
     while ($ref_block = $ref_seq->blocks($count++)) {
         my ($bw, $bh, $bmid_x) = &SizeOfBlock($ref_block); # ???
@@ -643,17 +655,25 @@ sub DrawBranch {
                       $last_x, $ref_seq->y + $ref_seq->height - $SeqMargin);
         } else {
             &Polyline($last_x, $top->y + $bh,
-                      $last_x, $ref_seq->y + $ref_seq->height);  # 分岐直下の線
+                      $last_x, $ref_seq->y + $ref_seq->height);  # 分岐の合流点の下の線
         }
-#        &TextSmall($cx - $FontSizeS * 2 ,
-#                   $cy + $SeqMargin + $DiaHeight / 2 , "YES");
-#        &TextSmall($cx + $SeqWidth/2 + $FontSizeS*2 ,$cy - 2, "NO");
+
+        my $sel = $ref_seq->selectors($count - 1);
+        if (defined($sel)) {
+            $Debug && print "  selecor $sel\n";
+            &TextSmall($last_x + 16, $top->y,              # 分岐直下の線
+                       $sel);
+            $use_yes_no = 0;
+        }
+
     }
     $count --;
-    if ($count == 1) {
+
+    if ($use_yes_no) {
         &TextSmall($cx - $FontSizeS*2 ,$cy + $DiaHeight/2 + $FontSizeS, "YES");
         &TextSmall($cx + $SeqWidth/2 + $FontSizeS*2 ,$cy - 2, "NO");
-        $Debug && print "DrawBranch $x $y $width $height\n";
+    }
+    if ($count == 1) {
         &PolylineA($cx + $SeqWidth/2, $cy,
                    $x + $width, $cy,
                    $x + $width, $y + $height - $SeqMargin,
@@ -724,7 +744,7 @@ END_OF_DATA
 sub Box {
     my($x,$y,$w,$h) = @_;
 	print OUT <<END_OF_DATA;
-        <rect x="$x" y="$y" width="$w" height="$h" fill="white" stroke="black" />
+        <rect x="$x" y="$y" width="$w" height="$h" fill="$ColorSeq" stroke="black" />
 END_OF_DATA
 }
 
@@ -733,8 +753,8 @@ sub BoxF {
     my($x,$y,$w,$h) = @_;
     my($x1,$w1) = ($x + $FuncPadding,$w - $FuncPadding*2);
 	print OUT <<END_OF_DATA;
-        <rect x="$x" y="$y" width="$w" height="$h" fill="slateblue" stroke="black" />
-        <rect x="$x1" y="$y" width="$w1" height="$h" fill="slateblue" stroke="black" />
+        <rect x="$x" y="$y" width="$w" height="$h" fill="$ColorModule" stroke="black" />
+        <rect x="$x1" y="$y" width="$w1" height="$h" fill="$ColorModule" stroke="black" />
 END_OF_DATA
 }
 
@@ -743,7 +763,7 @@ sub RoundBox {
     my($x,$y,$w,$h) = @_;
     my ($r) = $h/2;
 	print OUT <<END_OF_DATA;
-        <rect x="$x" y="$y" width="$w" height="$h" rx="$r" fill="white" stroke="black" />
+        <rect x="$x" y="$y" width="$w" height="$h" rx="$r" fill="$ColorNode" stroke="black" />
 END_OF_DATA
 }
 
@@ -856,10 +876,11 @@ sub XMLText {
     return ($text);
 }
 
+
 sub Diamond {
-    my($cx,$y,$w,$h) = @_;                                  # 始点は中央上
+    my($cx,$y,$w,$h,$c) = @_;                                  # 始点は中央上
     my($x2,$y2,$x3,$y3) = ($cx + $w/2, $y + $h/2, $cx - $w/2, $y + $h);
     print OUT <<END_OF_DATA;
-    <polygon points="$cx $y, $x2 $y2, $cx $y3, $x3 $y2" fill="orangered" stroke="black" />
+    <polygon points="$cx $y, $x2 $y2, $cx $y3, $x3 $y2" fill="$c" stroke="black" />
 END_OF_DATA
 }
