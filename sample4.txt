@@ -1,0 +1,82 @@
+start
+///* function4
+
+sequence
+/// a = b
+
+sequence multi line
+/// this is a test abc
+/// this is a test
+
+log term
+/// aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+log term
+/// 日本語日本語日本語日本語日本語日本語日本語日本語日本語
+
+
+/// a ← b
+
+/// get query
+
+function call
+/// [submodule aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]
+
+loop(do-while)
+///{
+
+branch
+///
+
+///|> cond1
+
+/// a = 1
+
+///>|
+
+branch 2
+
+///|> cond2 == false
+
+/// b = 1
+
+///>
+
+/// b = 2
+
+/// A++
+
+///>|
+
+branch n
+
+///|> cond3 : 'A'
+
+/// c = A
+
+/// A++
+
+/// B--
+
+///> 'B'
+
+/// c = B
+
+Jump out
+/// => 1
+
+///> 'C'
+
+/// c = C
+
+///>|
+
+loop end
+///} loop > end
+
+jump in
+/// <= 1
+
+
+end
+///**

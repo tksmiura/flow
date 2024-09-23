@@ -71,8 +71,9 @@ $DiaHeight = 32;                                            # 分岐（菱側の
 $SideMargin = 40;                                           # 分岐間の横方向のマージン
 $ArrowLength = 5;                                           # 矢印の長さ
 $ArrowWidth = 2;                                            # 矢印の幅
-$FuncPadding = 5;                                           # 関数の２重線の隙間
+$FuncPadding = 4;                                           # 関数の２重線の隙間
 $PageMargin = 10;
+$CircleSize = 15;                                           # 丸の大きさ
 
 
 #色
@@ -264,19 +265,14 @@ sub CreateJumpOut {
     return $seq;                                           # 参照を返す
 }
 
-#構造作成
-sub CreateSequence {
-    my ($text,$style) = @_;
-    my $seq = Node->new();
-    my $w = 0;
+sub SizeOfText {
+    my ($text) = @_;
     my $h = 0;
-    my ($ch, $l, $w_max);
+    my $w_max = $SeqWidth - $BoxPadding * 2;
 
-    $w_max = $SeqWidth;
-
-    foreach $l (split /\n/, $text) {
+    foreach my $l (split /\n/, $text) {
         my $n = Text::VisualWidth::PP::width($l);
-        $w = $FontWidth * $n;
+        my $w = $FontWidth * $n;
         if ($w_max < $w) {
             $w_max = $w;
         }
@@ -285,12 +281,22 @@ sub CreateSequence {
     if ($h == 0) {
         $h = $FontHeight;
     }
+    return ($w_max, $h);
+}
+
+#構造作成
+sub CreateSequence {
+    my ($text,$style) = @_;
+    my $seq = Node->new();
+    my ($w, $h) = &SizeOfText($text);
+
+    $w += $BoxPadding * 2;
 
     $seq->type($Seq);
     $seq->x(0);
     $seq->y(0);
-    $seq->mid_x($w_max / 2);
-    $seq->width($w_max);
+    $seq->mid_x($w / 2);
+    $seq->width($w);
     if ($style eq $Begin) {
         $seq->height($h + $BoxPadding * 2  + $SeqMargin);
     } elsif ($style eq $End) {
@@ -424,6 +430,14 @@ sub Position {
     return ($width,$height);
 }
 
+# 文字列の前後の空白を削除
+sub Trim {
+    my ($t) = @_;
+    $t =~ s/^\s+//;
+    $t =~ s/\s+$//;
+    return $t;
+}
+
 # 1ライン読みだし
 sub GetLine {
     if (defined($PreRead)) {
@@ -440,6 +454,7 @@ sub GetLine {
     }
 }
 
+# ラインの書き戻し
 sub RevertLine {
     my $l = $_;
     $PreRead = $;
@@ -472,20 +487,20 @@ sub Readline {
             next;
         }
 
-        if ($l =~ /\{\s*(.*)\s*$/) {                   # { as loop
+        if ($l =~ /\{\s*(.*)/) {                   # { as loop
             if ($Line != 0) {
                 goto END_SEQ;
             }
             $Line = $While;
-            $Text = $1;
+            $Text = &Trim($1);
             $Debug && print "Loop($Line):$Text\n";
             return;
-        } elsif ($l =~ /\}\s*(.*)\s*$/) {              # } as loop end
+        } elsif ($l =~ /\}\s*(.*)/) {              # } as loop end
             if ($Line != 0) {
                 goto END_SEQ;
             }
             $Line = $EndLoop;
-            $Text = $1;
+            $Text = &Trim($1);
             $Debug && print "LoopEnd($Line):$Text\n";
             return;
         } elsif ($l =~ /=>\s*(.*)/) {                       # =>
@@ -493,14 +508,14 @@ sub Readline {
                 goto END_SEQ;
             }
             $Line = $JumpOut;
-            $Text = $1;
+            $Text = &Trim($1);
             $Debug && print "JumpOut:$Text\n";
         } elsif ($l =~ /<=\s*(.*)/) {                       # <=
             if ($Line != 0) {
                 goto END_SEQ;
             }
             $Line = $JumpIn;
-            $Text = $1;
+            $Text = &Trim($1);
             $Debug && print "JumpIn:$Text\n";
             return;
             return;
@@ -509,8 +524,8 @@ sub Readline {
                 goto END_SEQ;
             }
             $Line = $If;
-            $Text = $1;
-            $Selector = $3;
+            $Text = &Trim($1);
+            $Selector = &Trim($3);
             $Debug && print "Branch($Line):$Text $Selector\n";
             return;
         } elsif ($l =~ />(\s+(.*)\s*|)$/) {           # > as branch internal
@@ -519,7 +534,7 @@ sub Readline {
             }
             $Line = $Else;
             $Text =  "";
-            $Selector = $2;
+            $Selector = &Trim($2);
             $Debug && print "BranchIn($Line): $Text $Selector\n";
             return;
         } elsif ($l =~ />\|$/) {                       # >| branch end
@@ -534,7 +549,7 @@ sub Readline {
                 goto END_SEQ;
             }
             $Line = $Func;
-            $Text = $1;
+            $Text = &Trim($1);
             $Debug && print "Module($Line):$Text\n";
             return;
         } elsif ($l =~ /\*\s+([^\s]*)/) {              # * name
@@ -556,9 +571,10 @@ sub Readline {
         } elsif ($l =~ /([^\s].*)$/) {                 # sequence
             if ($Line != $Seq) {
                 $Line = $Seq;
-                $Text = $1;
+                $Text = &Trim($1);
             } else {
-                $Text .= "\n$1";
+                my $t = &Trim($1);
+                $Text .= "\n$t";
             }
         }
     }
@@ -571,7 +587,7 @@ sub Readline {
 }
 
 ##################################################################
-#SVG
+# Draw SVG
 sub DrawFlow {
     my ($out_file, $width, $height, $ref_block) =@_;
 
@@ -756,19 +772,14 @@ sub DrawJumpIn {
         ($ref_seq->x, $ref_seq->y,
          $ref_seq->width, $ref_seq->height,
          $ref_seq->mid_x, $ref_seq->text);
-
     my ($cx) = $x + $mid_x;
     my ($cy) = $y + $height / 2;
-
-    my $t;
 
     $Debug && print "DrawJumpIn $x, $y, $width, $height, $mid_x, $text\n";
     &Polyline($cx, $y, $cx, $y + $height);
     &PolylineA($cx + $SeqWidth / 4, $cy, $cx, $cy);
-    &Circle($cx + $SeqWidth / 4 + 15, $cy, 15)
-    &Text($cx + $SeqWidth / 4 + 15, $cy + $FontHeight / 2, $text);
-
-    #&RoundBox($x, $y, $width, $FontHeight * 1 + $BoxPadding * 2);
+    &Circle($cx + $SeqWidth / 4 + $CircleSize, $cy, $CircleSize)
+    &Text($cx + $SeqWidth / 4 + $CircleSize, $cy + $FontHeight / 2, $text);
 }
 
 sub DrawJumpOut {
@@ -777,19 +788,14 @@ sub DrawJumpOut {
         ($ref_seq->x, $ref_seq->y,
          $ref_seq->width, $ref_seq->height,
          $ref_seq->mid_x, $ref_seq->text);
-
     my ($cx) = $x + $mid_x;
     my ($cy) = $y + $height / 2;
-
-    my $t;
 
     $Debug && print "DrawJumpOut $x, $y, $width, $height, $mid_x, $text\n";
     &Polyline($cx, $y, $cx, $cy);
     &PolylineA($cx, $cy, $cx + $SeqWidth / 4, $cy);
-    &Circle($cx + $SeqWidth / 4 + 15, $cy, 15)
-    &Text($cx + $SeqWidth / 4 + 15, $cy + $FontHeight / 2, $text);
-
-    #&RoundBox($x, $y, $width, $FontHeight * 1 + $BoxPadding * 2);
+    &Circle($cx + $SeqWidth / 4 + $CircleSize, $cy, $CircleSize)
+    &Text($cx + $SeqWidth / 4 + $CircleSize, $cy + $FontHeight / 2, $text);
 }
 
 sub DrawSequence {
@@ -800,7 +806,6 @@ sub DrawSequence {
          $ref_seq->mid_x, $ref_seq->text,
          $ref_seq->style);
     my ($cx) = $x + $mid_x;
-    my $t;
 
     $Debug && print "DrawSequence $x, $y, $width, $height, $mid_x, $text, $style\n";
     if ($style eq $Begin) {
@@ -821,7 +826,7 @@ sub DrawSequence {
             &Box($x, $y, $width, $height - $SeqMargin * 2);
         }
     }
-    foreach $t (split /\n/, $text) {
+    foreach my $t (split /\n/, $text) {
         &Text($cx, $y + $FontHeight * 1 + $BoxPadding, $t);
         $y += $FontHeight;
     }
@@ -857,7 +862,7 @@ END_OF_DATA
 #ボックス（関数呼び出し）
 sub BoxF {
     my($x,$y,$w,$h) = @_;
-    my($x1,$w1) = ($x + $FuncPadding,$w - $FuncPadding*2);
+    my($x1,$w1) = ($x + $FuncPadding, $w - $FuncPadding*2);
 	print OUT <<END_OF_DATA;
         <rect x="$x" y="$y" width="$w" height="$h" fill="$ColorModule" stroke="black" />
         <rect x="$x1" y="$y" width="$w1" height="$h" fill="$ColorModule" stroke="black" />
