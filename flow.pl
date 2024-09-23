@@ -894,7 +894,7 @@ sub TextSmall {
     my ($x, $y, $text) = @_;
     my ($text2) = &XMLText($text);
 	print OUT <<END_OF_DATA;
-        <text text-anchor="middle" x="$x" y="$y" font-size="$FontSizeS" font-family="$FontFamily">
+        <text text-anchor="start" x="$x" y="$y" font-size="$FontSizeS" font-family="$FontFamily">
             $text2
         </text>
 END_OF_DATA
